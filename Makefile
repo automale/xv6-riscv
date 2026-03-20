@@ -55,11 +55,24 @@ endif
 QEMU = qemu-system-riscv64
 MIN_QEMU_VERSION = 7.2
 
-CC = $(TOOLPREFIX)gcc
-AS = $(TOOLPREFIX)gas
-LD = $(TOOLPREFIX)ld
-OBJCOPY = $(TOOLPREFIX)objcopy
-OBJDUMP = $(TOOLPREFIX)objdump
+# CC = $(TOOLPREFIX)gcc
+# AS = $(TOOLPREFIX)gas
+# LD = $(TOOLPREFIX)ld
+# OBJCOPY = $(TOOLPREFIX)objcopy
+# OBJDUMP = $(TOOLPREFIX)objdump
+# --- 기존 GCC 설정 (주석 처리 또는 변경) ---
+ 
+# --- LLVM/Clang 설정 ---
+CC = clang
+# Clang은 타겟을 명시해야 합니다.
+CFLAGS += --target=riscv64-unknown-elf -mno-relax
+AS = $(CC)
+# 링커로 lld를 사용합니다.
+LD = ld.lld
+OBJCOPY = llvm-objcopy
+OBJDUMP = llvm-objdump
+# GDB는 여전히 gdb-multiarch를 사용합니다.
+GDB = gdb-multiarch
 
 CFLAGS = -Wall -Werror -Wno-unknown-attributes -O -fno-omit-frame-pointer -ggdb -gdwarf-2
 CFLAGS += -march=rv64gc
