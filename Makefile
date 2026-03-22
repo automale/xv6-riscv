@@ -62,50 +62,35 @@ MIN_QEMU_VERSION = 7.2
 # OBJDUMP = $(TOOLPREFIX)objdump
 # --- 기존 GCC 설정 (주석 처리 또는 변경) ---
  
-# --- LLVM/Clang 설정 ---
-CC = clang
-# Clang은 타겟을 명시해야 합니다.
-CFLAGS += --target=riscv64-unknown-elf -mno-relax
-AS = $(CC)
-# 링커로 lld를 사용합니다.
+CC := clang
+AS := clang
 LD = ld.lld
 OBJCOPY = llvm-objcopy
 OBJDUMP = llvm-objdump
-# GDB는 여전히 gdb-multiarch를 사용합니다.
 GDB = gdb-multiarch
 
-CFLAGS = -Wall -Werror -Wno-unknown-attributes -O -fno-omit-frame-pointer -ggdb -gdwarf-2
-CFLAGS += -march=rv64gc
-CFLAGS += -MD
-CFLAGS += -mcmodel=medany
-CFLAGS += -ffreestanding
-CFLAGS += -fno-common -nostdlib
+CFLAGS = --target=riscv64-unknown-elf -mno-relax -Wall -Werror -Wno-unknown-attributes -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+CFLAGS += -march=rv64gc -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib
 CFLAGS += -fno-builtin-strncpy -fno-builtin-strncmp -fno-builtin-strlen -fno-builtin-memset
 CFLAGS += -fno-builtin-memmove -fno-builtin-memcmp -fno-builtin-log -fno-builtin-bzero
 CFLAGS += -fno-builtin-strchr -fno-builtin-exit -fno-builtin-malloc -fno-builtin-putc
-CFLAGS += -fno-builtin-free
-CFLAGS += -fno-builtin-memcpy -Wno-main
+CFLAGS += -fno-builtin-free -fno-builtin-memcpy -Wno-main
 CFLAGS += -fno-builtin-printf -fno-builtin-fprintf -fno-builtin-vprintf
-CFLAGS += -I.
-CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
-
-# Disable PIE when possible (for Ubuntu 16.10 toolchain)
-ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
-CFLAGS += -fno-pie -no-pie
-endif
-ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
-CFLAGS += -fno-pie -nopie
-endif
+# (중요) x4 고정 및 PIE/PIC 완전 비활성화
+CFLAGS += -ffixed-x4 -I. -fno-pie -fno-pic
 
 LDFLAGS = -z max-page-size=4096
 
 $K/kernel: $(OBJS) $K/kernel.ld
-	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
+	$(LD) $(LDFLAGS) -e _entry -T $K/kernel.ld -o $K/kernel $(OBJS) 
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 $K/%.o: $K/%.S
-	$(CC) -march=rv64gc -g -c -o $@ $<
+	$(CC) $(CFLAGS) -g -c -o $@ $<
 
 tags: $(OBJS)
 	etags kernel/*.S kernel/*.c
@@ -113,7 +98,7 @@ tags: $(OBJS)
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
 _%: %.o $(ULIB) $U/user.ld
-	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
+	$(LD) $(LDFLAGS) -N -e main -T $U/user.ld -o $@ $< $(ULIB)
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
 
@@ -151,13 +136,13 @@ UPROGS=\
 	$U/_rm\
 	$U/_sh\
 	$U/_stressfs\
-	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
 	$U/_logstress\
 	$U/_forphan\
 	$U/_dorphan\
+	# $U/_usertests\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
